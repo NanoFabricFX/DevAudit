@@ -57,6 +57,9 @@
       <HintPath>..\packages\Devsense.PHP.Parser.NET46.1.0.0.0\lib\net461\Devsense.PHP.Parser.NET46.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="FileCache, Version=2.1.4.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\FileCache.2.1.4\lib\net45\FileCache.dll</HintPath>
+    </Reference>
     <Reference Include="Gendarme.Framework, Version=2.11.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Gendarme.Framework.2.11.0.20121120\lib\net40\Gendarme.Framework.dll</HintPath>
       <Private>True</Private>
@@ -160,6 +163,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
@@ -262,9 +266,8 @@
       <HintPath>..\packages\Versatile.0.2.2.0\lib\net45\Versatile.Core.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="YamlDotNet, Version=3.9.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\YamlDotNet.3.9.0\lib\net35\YamlDotNet.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="YamlDotNet, Version=5.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\YamlDotNet.5.2.1\lib\net45\YamlDotNet.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -272,6 +275,12 @@
     <Compile Include="AuditProfileRule.cs" />
     <Compile Include="AuditReporter.cs" />
     <Compile Include="Containers\DockerContainer.cs" />
+    <Compile Include="DataSources\OSSIndex3\Models\OSSIndexApiv3Package.cs" />
+    <Compile Include="DataSources\OSSIndex3\Models\OSSIndexApiv3Vulnerability.cs" />
+    <Compile Include="DataSources\OSSIndex3\OSSIndexApiv3DataSource.cs" />
+    <Compile Include="DataSources\OSSIndex3\OSSIndexApiv3Query.cs" />
+    <Compile Include="DataSources\OSSIndex3\PackageURL\MalformedPackageUrlException.cs" />
+    <Compile Include="DataSources\OSSIndex3\PackageURL\PackageURL.cs" />
     <Compile Include="Environments\Models\ProcessInfo.cs" />
     <Compile Include="Utility.cs" />
     <Compile Include="DataSourceInfo.cs" />

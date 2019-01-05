@@ -1,3 +1,7 @@
+
+**Note**: The 3.x release uses the new 3.x OSS Index database, which has some rate limiting. If you notice you are hitting the limit please raise an issue. Authenticated users get a higher limit, and we am implementing authentication into DevAudit soon. Most non-authenticated users probably won't notice the limit for many use cases. It usually kicks in only in much larger projects or higher project volumes.
+
+
 # DevAudit: Development Auditing
 Get the latest release from the [releases](https://github.com/OSSIndex/DevAudit/releases) page.
 
@@ -65,7 +69,7 @@ On Linux the minimum version of Mono supported is 4.4. Although DevAudit runs on
 
 The existing Mono packages provided by your distro are probably not Mono 5 as yet, so you will have to install Mono packages manually to be able to use Mono 5. Installation instructions for the most recent packages provided by the Mono project for several major Linux distros are [here](http://www.mono-project.com/docs/getting-started/install/linux/). It is recommended you have the mono-devel package installed as this will reduce the chances of missing assemblies.
 
-Alternatively on Linux you can use the DevAudit Docker image if you do not wish to install Mono and already have Docker installed on ypur machine.
+Alternatively on Linux you can use the DevAudit Docker image if you do not wish to install Mono and already have Docker installed on your machine.
 
 ## Installation
 DevAudit can be installed by the following methods:

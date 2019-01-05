@@ -18,8 +18,10 @@ namespace DevAudit.CommandLine
         [VerbOption("nuget", HelpText = "Audit NuGet packages. Use the --file option to specify a particular packages.config file otherwise the one in the current directory will be used.")]
         public Options AuditNuGet { get; set; }
 
-        [VerbOption("msi", HelpText = "Audit MSI packages on Windows. Packages are scanned from the registry.")]
-        public Options AuditMsi { get; set; }
+        /** This is rarely used, and the v3 API does not currently support MSI packages.
+         * [VerbOption("msi", HelpText = "Audit MSI packages on Windows. Packages are scanned from the registry.")]
+         * public Options AuditMsi { get; set; }
+         */
 
         [VerbOption("choco", HelpText = "Audit Chocolatey packages on Windows. Packages are scanned from C:\\ProgramData\\chocolatey.")]
         public Options AuditChocolatey { get; set; }
@@ -36,7 +38,10 @@ namespace DevAudit.CommandLine
         [VerbOption("composer", HelpText = "Audit PHP Composer packages. Use the --file option to specify a particular composer.json file otherwise the one in the current directory will be used.")]
         public Options AuditComposer { get; set; }
 
-        [VerbOption("dpkg", HelpText = "Audit dpkg packages on Linux. The packages are scanned from the system dpkg repository.")]
+        /** The dpkg data is not available on OSS Index at this time
+         * 
+         * [VerbOption("dpkg", HelpText = "Audit dpkg packages on Linux. The packages are scanned from the system dpkg repository.")]
+         */
         public Options AuditDpkg { get; set; }
          
         [VerbOption("rpm", HelpText = "Audit rpm packages on Linux. The packages are scanned from the system rpm repository.")]
@@ -48,12 +53,13 @@ namespace DevAudit.CommandLine
         [VerbOption("docker", HelpText = "Audit the configuration and operating system, servers, and applications present in a Linux Docker container. Use the -f/--file option to specify a Dockerfile to statically analyze or the -i/--container-id option to specify a running Docker container to perform a runtime analysis.")]
         public Options AuditDockerContainer { get; set; }
 
-        [VerbOption("drupal8", HelpText = "Audit a Drupal 8 application instance. Use the -r option to specify the root directory of the Drupal 8 instance, otherwise the current directory will be used.")]
-        public Options AuditDrupal8 { get; set; }
-
-        [VerbOption("drupal7", HelpText = "Audit a Drupal 7 application instance. Use the -r option to specify the root directory of the Drupal 7 instance, otherwise the current directory will be used.")]
-        public Options AuditDrupal7 { get; set; }
-
+        /* Disabled. Drupal does not appear to be used at this time, and maintenance of the data and code takes time we do not currently have.
+         * [VerbOption("drupal8", HelpText = "Audit a Drupal 8 application instance. Use the -r option to specify the root directory of the Drupal 8 instance, otherwise the current directory will be used.")]
+         * public Options AuditDrupal8 { get; set; }
+         * 
+         * [VerbOption("drupal7", HelpText = "Audit a Drupal 7 application instance. Use the -r option to specify the root directory of the Drupal 7 instance, otherwise the current directory will be used.")]
+         * public Options AuditDrupal7 { get; set; }
+         */
         [VerbOption("mysql", HelpText = "Audit a MySQL database server instance. Use the -r option to specify the root directory of the mysqld server. Use the -b option to specify the path to the mysqld server binary and the -c option to specify the configuration file otherwise default values will be used for these 2 parameters.")]
         public Options MySQL { get; set; }
 
@@ -206,10 +212,13 @@ namespace DevAudit.CommandLine
         [Option("profile", Required = false, HelpText = "Use the specified file as the audit profile for this audit run.")]
         public string Profile { get; set; }
 
+        [Option("ci", Required = false, HelpText = "Run in 'continuous integration' mode. Returns non-zero exist when vulnerabilities found.")]
+        public bool CiMode { get; set; }
+
         //[Option("with-ossi", Required = false, HelpText = "Use vulnerability data from the OSS Index API. This data source is used by default when no other data source is specified.")]
         public bool WithOSSI { get; set; }
 
-        //[Option("with-vulners", Required = false, HelpText = "Use vulnerability data from the vulners.com API and/or data files.")]
+        [Option("with-vulners", Required = false, HelpText = "Use vulnerability data from the vulners.com API and/or data files.")]
         public bool WithVulners { get; set; }
 
         //[Option("with-libio", Required = false, HelpText = "Use artifact data from the libraries.io API.")]

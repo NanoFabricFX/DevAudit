@@ -54,7 +54,7 @@ namespace DevAudit.AuditLibrary
                     else
                     {
                         string[] output = e.Data.Trim().Split(' ');
-                        if ((output == null) || (output != null) && (output.Length != 2))
+                        if ((output == null) || (output != null) && (output.Length < 2))
                         {
                             throw new Exception("Could not parse output from choco command: " + e.Data);
                         }
@@ -99,7 +99,8 @@ namespace DevAudit.AuditLibrary
         #endregion
 
         #region Constructors
-        public ChocolateyPackageSource(Dictionary<string, object> package_source_options, EventHandler<EnvironmentEventArgs> message_handler) : base(package_source_options,message_handler) {}
+        public ChocolateyPackageSource(Dictionary<string, object> package_source_options, EventHandler<EnvironmentEventArgs> message_handler) : base(package_source_options,message_handler) {
+        }
         #endregion
 
     }

@@ -483,7 +483,10 @@ namespace DevAudit.AuditLibrary
             sw.Start();
             AuditFileInfo rules_file = this.HostEnvironment.ConstructFile(Path.Combine(this.DevAuditDirectory, "Rules", this.ApplicationId + "." + "yml"));
             if (!rules_file.Exists) throw new Exception(string.Format("The default rules file {0} does not exist.", rules_file.FullName));
-            Deserializer yaml_deserializer = new Deserializer(namingConvention: new CamelCaseNamingConvention(), ignoreUnmatched: true);
+            IDeserializer yaml_deserializer = new DeserializerBuilder()
+            .WithNamingConvention(new CamelCaseNamingConvention())
+            .IgnoreUnmatchedProperties()
+            .Build();
             Dictionary<string, List<ConfigurationRule>> rules;
             rules = yaml_deserializer.Deserialize<Dictionary<string, List<ConfigurationRule>>>(new StringReader(rules_file.ReadAsText()));
             if (rules == null)
@@ -610,7 +613,20 @@ namespace DevAudit.AuditLibrary
                         string message;
                         lock (evaluate_rules)
                         {
-                            results.Add(r, new Tuple<bool, List<string>, string>(this.Configuration.XPathEvaluate(r.XPathTest, out result, out message), result, message));
+                            try
+                            {
+                                bool xpathResult = this.Configuration.XPathEvaluate(r.XPathTest, out result, out message);
+                                results.Add(r, new Tuple<bool, List<string>, string>(xpathResult, result, message));
+                            }
+                            catch (Exception e)
+                            {
+                                result = new List<string>();
+                                result.Add("Skipped");
+                                this.AuditEnvironment.Debug("Not evaluating rule \"{0}\"; cannot evaluate XPath expression", r.Title);
+                                this.AuditEnvironment.Debug("  XPath exception on '{0}': {1}", r.XPathTest, e);
+                                results.Add(r, new Tuple<bool, List<string>, string>(false, result, "Skipped"));
+                                this.DisabledRules.Add(r);
+                            }
                         }
                     }
                 });
