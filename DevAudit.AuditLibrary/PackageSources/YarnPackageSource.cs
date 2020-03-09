@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
@@ -8,13 +9,15 @@ using System.Xml.Linq;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using Sprache;
 using Versatile;
 
 using Alpheus;
 
 namespace DevAudit.AuditLibrary
 {
-    public class YarnPackageSource : PackageSource, IVulnerableCredentialStore
+    public class YarnPackageSource : PackageSource, IDeveloperPackageSource
     {
         #region Constructors
         public YarnPackageSource(Dictionary<string, object> package_source_options, EventHandler<EnvironmentEventArgs> message_handler = null) : base(package_source_options, message_handler)
@@ -23,15 +26,13 @@ namespace DevAudit.AuditLibrary
         }
         #endregion
 
-        #region Overriden properties
+        #region Overriden members
         public override string PackageManagerId { get { return "yarn"; } }
 
         public override string PackageManagerLabel { get { return "Yarn"; } }
 
         public override string DefaultPackageManagerConfigurationFile { get { return "package.json"; } }
-        #endregion
-
-        #region Overriden methods
+        
         public override IEnumerable<Package> GetPackages(params string[] o)
         {
             List<Package> packages = new List<Package>();
@@ -44,23 +45,30 @@ namespace DevAudit.AuditLibrary
             JObject bundled_dependencies = (JObject)json["bundledDependencies"];
             if (dependencies != null)
             {
-                packages.AddRange(dependencies.Properties().Select(d => new Package("npm", d.Name, d.Value.ToString(), "")));
+                packages.AddRange(dependencies.Properties()
+                    .SelectMany(d => GetDeveloperPackages(d.Name.Replace("@", ""), d.Value.ToString())));
             }
             if (dev_dependencies != null)
             {
-                packages.AddRange(dev_dependencies.Properties().Select(d => new Package("npm", d.Name, d.Value.ToString(), "")));
+                packages.AddRange(dev_dependencies.Properties()
+                    .SelectMany(d => GetDeveloperPackages(d.Name.Replace("@", ""), d.Value.ToString())));
             }
             if (peer_dependencies != null)
             {
-                packages.AddRange(peer_dependencies.Properties().Select(d => new Package("npm", d.Name, d.Value.ToString(), "")));
+                packages.AddRange(peer_dependencies.Properties()
+                    .SelectMany(d => GetDeveloperPackages(d.Name.Replace("@", ""), d.Value.ToString())));
+
             }
             if (optional_dependencies != null)
             {
-                packages.AddRange(optional_dependencies.Properties().Select(d => new Package("npm", d.Name, d.Value.ToString(), "")));
+                packages.AddRange(optional_dependencies.Properties()
+                    .SelectMany(d => GetDeveloperPackages(d.Name.Replace("@", ""), d.Value.ToString())));
+
             }
             if (bundled_dependencies != null)
             {
-                packages.AddRange(bundled_dependencies.Properties().Select(d => new Package("npm", d.Name, d.Value.ToString(), "")));
+                packages.AddRange(bundled_dependencies.Properties()
+                    .SelectMany(d => GetDeveloperPackages(d.Name.Replace("@", ""), d.Value.ToString())));
             }
             return packages;
         }
@@ -77,50 +85,104 @@ namespace DevAudit.AuditLibrary
         }
         #endregion
 
+        #region Properties
+        public string PackageSourceLockFile {get; set;}
+
+        public string DefaultPackageSourceLockFile {get; } = "yarn.lock";
+        #endregion
+        
         #region Methods
-        public List<VulnerableCredentialStorage> GetVulnerableCredentialStorage()
+        public bool PackageVersionIsRange(string version)
         {
-            AuditFileInfo config_file = this.AuditEnvironment.ConstructFile(this.PackageManagerConfigurationFile);
-            JSONConfig json_config = new JSONConfig(config_file);
-            if (!json_config.ParseSucceded)
+            var lcs = SemanticVersion.Grammar.Range.Parse(version);
+            if (lcs.Count > 1) 
             {
-                this.AuditEnvironment.Error("Could not parse JSON from {0}.", json_config.FullFilePath);
-                if (json_config.LastParseException != null) this.AuditEnvironment.Error(json_config.LastParseException);
-                if (json_config.LastIOException != null) this.AuditEnvironment.Error(json_config.LastIOException);
-                return null;
+                return true;
             }
-            this.AuditEnvironment.Status("Scanning for git credential storage candidates in {0}", config_file.FullName);
-            IEnumerable<XElement> candidate_elements =
-                from e in json_config.XmlConfiguration.Root.Descendants()
-                    //where e.Value.Trim().StartsWith("git+https") || e.Value.Trim().StartsWith("git") || e.Value.Trim().StartsWith("https")
-                where e.Elements().Count() == 0 && Utility.CalculateEntropy(e.Value) > 4.5
-                select e;
-            if (candidate_elements != null && candidate_elements.Count() > 0)
+            else if (lcs.Count == 1)
             {
-                this.CredentialStorageCandidates = new List<VulnerableCredentialStorage>();
-                foreach (XElement e in candidate_elements)
+                var cs = lcs.Single();
+                if (cs.Count == 1 && cs.Single().Operator == ExpressionType.Equal)
                 {
-                    this.CredentialStorageCandidates.Add(new VulnerableCredentialStorage
-                    {
-                        File = config_file.FullName,
-                        Contents = json_config,
-                        Location = e.AncestorsAndSelf().Reverse().Select(a => a.Name.LocalName).Aggregate((a1, a2) => a1 + "/" + a2)
-                            .Replace("Container/", string.Empty),
-                        Entropy = Utility.CalculateEntropy(e.Value),
-                        Value = e.Value
-                    });
+                    return false;
                 }
-                this.AuditEnvironment.Success("Found {0} credential storage candidates.", this.CredentialStorageCandidates.Count);
-                return this.CredentialStorageCandidates;
+                else
+                {
+                    return true;
+                }
             }
-            else
-            {
-                this.AuditEnvironment.Info("No credential storage candidates found.");
-                return null;
-            }
-
-            #endregion
-
+            else throw new ArgumentException($"Failed to parser {version} as a Yarn version.");
         }
+        
+        public List<string> GetMinimumPackageVersions(string version)
+        {
+            if (version == "*")
+            {
+                this.AuditEnvironment.Debug("Using {0} package version {1} which satisfies range {2}.", 
+                            this.PackageManagerLabel, "0.1", version);
+                return new List<string>(1) {"0.1"};
+            }
+            else if (version.StartsWith("git"))
+            {
+                this.AuditEnvironment.Info("Using {0} package version {1} since it specifies a git commit in the version field.", 
+                            this.PackageManagerLabel, "0.1", version);
+                return new List<string>(1) {"0.1"};
+            }
+            else if (version.StartsWith("file"))
+            {
+                this.AuditEnvironment.Info("Using {0} package version {1} since it specifies a file in the version field.",
+                            this.PackageManagerLabel, "0.1", version);
+                return new List<string>(1) { "0.1" };
+            }
+            else if (version.StartsWith("http"))
+            {
+                this.AuditEnvironment.Info("Using {0} package version {1} since it specifies an http/https URL in the version field.",
+                            this.PackageManagerLabel, "0.1", version);
+                return new List<string>(1) { "0.1" };
+            }
+            else if (version.StartsWith("npm:"))
+            {
+                var s = version.Split('@').Last();
+                this.AuditEnvironment.Info("Using {0} package version {1} since it specifies an npm package in the version field.",
+                            this.PackageManagerLabel, s, version);
+                return new List<string>(1) { s };
+            }
+
+            var lcs = SemanticVersion.Grammar.Range.Parse(version);
+            List<string> minVersions = new List<string>();
+            foreach(ComparatorSet<SemanticVersion> cs in lcs)
+            {
+                if (cs.Count == 1 && cs.Single().Operator == ExpressionType.Equal)
+                {
+                    minVersions.Add(cs.Single().Version.ToNormalizedString());
+                }
+                else
+                {
+                    var gt = cs.Where(c => c.Operator == ExpressionType.GreaterThan || c.Operator == ExpressionType.GreaterThanOrEqual).Single();
+                    if (gt.Operator == ExpressionType.GreaterThan)
+                    {
+                        var v = gt.Version;
+                        minVersions.Add((v++).ToNormalizedString());
+                        this.AuditEnvironment.Debug("Using {0} package version {1} which satisfies range {2}.", 
+                            this.PackageManagerLabel, (v++).ToNormalizedString(), version);
+                    }
+                    else
+                    {
+                        minVersions.Add(gt.Version.ToNormalizedString());
+                        this.AuditEnvironment.Debug("Using {0} package version {1} which satisfies range {2}.", 
+                            this.PackageManagerLabel, gt.Version.ToNormalizedString(), version);
+
+                    }
+                }
+            }
+            return minVersions;
+        }
+
+        public List<Package> GetDeveloperPackages(string name, string version, string vendor = null, string group = null,
+            string architecture = null)
+        {
+            return GetMinimumPackageVersions(version).Select(v => new Package("npm", name, v, vendor, group, architecture)).ToList();
+        }
+        #endregion
     }
 }

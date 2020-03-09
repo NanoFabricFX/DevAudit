@@ -17,8 +17,6 @@ namespace DevAudit.AuditLibrary
     public class OSSIndexApiv3DataSource : HttpDataSource
     {
         #region Properties
-        public Uri HttpsProxy { get; set; } = null;
-
         protected PackageSource PackageSource { get; set; }
 
         private string HOST = "https://ossindex.sonatype.org/api/";
@@ -34,8 +32,8 @@ namespace DevAudit.AuditLibrary
         {
             this.ApiUrl = new Uri(HOST);
             this.PackageSource = target as PackageSource;
-            this.Initialised = true;
-            this.Info = new DataSourceInfo("OSS Index", "https://ossindex.sonatype.org", "OSS Index is a free index of software information, focusing on vulnerabilities. The data has been made available to the community through a REST API as well as several open source tools. Particular focus is being made on software packages, both those used for development libraries as well as installation packages.");
+            this.Info = new DataSourceInfo("OSS Index", "https://ossindex.sonatype.org", 
+                "OSS Index is a free index of software information, focusing on vulnerabilities. The data has been made available to the community through a REST API as well as several open source tools. Particular focus is being made on software packages, both those used for development libraries as well as installation packages.");
 
             // Get an appropriate place for the cache and initialize it
             OperatingSystem os = Environment.OSVersion;
@@ -49,6 +47,20 @@ namespace DevAudit.AuditLibrary
                     {
                         var directory = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                         string path = Path.Combine(directory, "OSSIndex", "cache");
+                        if (Directory.Exists(path) && DeleteCache)
+                        {
+                            this.HostEnvironment.Info("Deleting existing file cache at {0}.", path);
+                            Directory.Delete(path, true);
+                        }
+                        else if(Directory.Exists(path))
+                        {
+                            this.HostEnvironment.Debug("Using existing file cache at {0}.", path);
+                        }
+                        else
+                        {
+                            this.HostEnvironment.Debug("Creating new file cache at {0}.", path);
+                        }
+
                         cache = new FileCache(path, new ObjectBinder());
                         break;
                     }
@@ -65,7 +77,9 @@ namespace DevAudit.AuditLibrary
                     cache = new FileCache(new ObjectBinder());
                     break;
             }
+            this.Initialised = true;
         }
+        
         #endregion
 
         #region Overriden methods
@@ -86,22 +100,32 @@ namespace DevAudit.AuditLibrary
             foreach(var package in inPackages)
             {
                 string purl = package.getPurl();
-                OSSIndexApiv3Package cachedPkg = (OSSIndexApiv3Package)cache[purl];
-                if (cachedPkg != null)
+                try
                 {
-                    long now = DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond;
-                    long diff = now - cachedPkg.CachedAt;
-                    if (diff < cacheExpiration)
+                    OSSIndexApiv3Package cachedPkg = (OSSIndexApiv3Package)cache[purl];
+                    if (cachedPkg != null)
                     {
-                        this.AddVulnerability(cachedPkg.Package, cachedPkg.Vulnerabilities);
+                        long now = DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond;
+                        long diff = now - cachedPkg.CachedAt;
+                        if (diff < cacheExpiration)
+                        {
+                            this.AddVulnerability(cachedPkg.Package, cachedPkg.Vulnerabilities);
+                            this.HostEnvironment.Debug("Using cache entry for package {0} with version {1} created at {2} UTC.",
+                                cachedPkg.Package.Name, cachedPkg.Package.Version, new DateTime((cachedPkg.CachedAt * TimeSpan.TicksPerSecond)));
+                        }
+                        else
+                        {
+                            doPackages.Add(package);
+                        }
                     }
                     else
                     {
                         doPackages.Add(package);
                     }
-                } else
+                }
+                catch (Exception)
                 {
-                    doPackages.Add(package);
+                    cache.Remove(purl);
                 }
             }
 
@@ -114,23 +138,17 @@ namespace DevAudit.AuditLibrary
                 {
                     try
                     {
-                        this.HostEnvironment.Info("------------------------------- Performing query on {0} packages", q.Count());
-
+                        this.HostEnvironment.Info("Performing query on {0} packages", q.Count());
                         List<OSSIndexApiv3Package> results = await SearchVulnerabilitiesAsync(q, this.VulnerabilitiesResultsTransform);
                         foreach (OSSIndexApiv3Package r in results)
                         {
                             r.CachedAt = DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond;
                             cache[r.Coordinates] = r;
-                            if (r.Vulnerabilities != null && r.Vulnerabilities.Count > 0)
-                            {
-                                this.AddVulnerability(r.Package, r.Vulnerabilities);
-                            }
+                            this.AddVulnerability(r.Package, r.Vulnerabilities);
                         }
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.ToString());
-
                         if (e is HttpException)
                         {
                             this.HostEnvironment.Error(here, e, "An HTTP error occured attempting to query the OSS Index API for the following {1} packages: {0}.",
@@ -159,8 +177,14 @@ namespace DevAudit.AuditLibrary
                 sw.Stop();
             }
 
-            return await Task.FromResult(this._Vulnerabilities.Select(kv => new KeyValuePair<IPackage, List<IVulnerability>>(kv.Key as IPackage, kv.Value.Select(v => v as IVulnerability)
-                 .ToList())).ToDictionary(x => x.Key, x => x.Value));
+            this.HostEnvironment.Status("Waiting...");
+
+            return await Task.FromResult(
+                this._Vulnerabilities.Select(
+                    kv => new KeyValuePair<IPackage, List<IVulnerability>>(
+                        kv.Key as IPackage,
+                        kv.Value.Select(v => v as IVulnerability).ToList()))
+                    .ToDictionary(x => x.Key, x => x.Value));
         }
 
         public override bool IsEligibleForTarget(AuditTarget target)
@@ -168,7 +192,7 @@ namespace DevAudit.AuditLibrary
             if (target is PackageSource)
             {
                 PackageSource source = target as PackageSource;
-                string[] eligible_sources = {"nuget", "bower", "composer", "chocolatey", "yarn", "oneget" };
+                string[] eligible_sources = {"nuget", "bower", "composer", "chocolatey", "yarn", "oneget", "nuget", "dpkg", "msi", "deb/ubuntu", "deb/debian" };
                 return eligible_sources.Contains(source.PackageManagerId);
             }
 
@@ -204,12 +228,13 @@ namespace DevAudit.AuditLibrary
             {
                 string url = "v" + server_api_version + "/component-report";
                 string content = JsonConvert.SerializeObject(query);
-
+                this.HostEnvironment.Debug("JSON query sent to OSS Index API: {0}.", content);
                 HttpResponseMessage response = await client.PostAsync(url,
                     new StringContent(content, Encoding.UTF8, "application/json"));
                 if (response.IsSuccessStatusCode)
                 {
                     string r = await response.Content.ReadAsStringAsync();
+                    this.HostEnvironment.Debug("JSON response from OSS Index API: {0}.", r);
                     List<OSSIndexApiv3Package> results = JsonConvert.DeserializeObject<List<OSSIndexApiv3Package>>(r);
                     if (results != null && results.Count > 0 && transform != null)
                     {
@@ -286,9 +311,6 @@ namespace DevAudit.AuditLibrary
             }
         }
 
-        #endregion
-
-        #region Properties
         #endregion
 
         #region Fields
